@@ -16,6 +16,7 @@ import os
 from typing import Optional
 
 import httpx
+import xmltodict
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
@@ -44,18 +45,18 @@ async def get_house_trade_price(lawd_cd: str, deal_ymd: str) -> dict:
     if not MOLIT_SERVICE_KEY:
         raise RuntimeError("MOLIT_SERVICE_KEY가 설정되지 않았습니다 (.env 확인)")
 
+    # 이 API는 JSON을 지원하지 않고 XML만 지원한다 (기술문서 확인 완료)
     params = {
         "serviceKey": MOLIT_SERVICE_KEY,
         "LAWD_CD": lawd_cd,
         "DEAL_YMD": deal_ymd,
         "numOfRows": "1000",
         "pageNo": "1",
-        "_type": "json",
     }
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(MOLIT_SH_TRADE_URL, params=params)
         resp.raise_for_status()
-        return resp.json()
+        return xmltodict.parse(resp.text)
 
 
 @mcp.tool()
