@@ -30,6 +30,7 @@ LAW_OC = os.environ.get("LAW_OC", "")
 MOLIT_SH_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade"
 
 LAW_SEARCH_URL = "http://www.law.go.kr/DRF/lawSearch.do"
+LAW_SERVICE_URL = "http://www.law.go.kr/DRF/lawService.do"
 
 mcp = FastMCP("korea-realestate")
 
@@ -60,25 +61,54 @@ async def get_house_trade_price(lawd_cd: str, deal_ymd: str) -> dict:
 
 
 @mcp.tool()
-async def search_law(query: str, display: int = 20) -> dict:
-    """법제처 국가법령정보에서 법령을 검색한다 (예: 소득세법, 종합부동산세법).
+async def search_law(query: str, target: str = "law", display: int = 20) -> dict:
+    """법제처 국가법령정보에서 법령 또는 행정규칙(고시)을 검색한다.
 
     Args:
-        query: 검색할 법령명 또는 키워드
+        query: 검색할 법령명/고시명 또는 키워드
+        target: "law"(법률/시행령/시행규칙, 기본값) 또는 "admrul"(행정규칙 — 투기과열지구
+                지정, 조정대상지역 지정 등 부처 고시가 여기 포함됨) 또는 "ordin"(자치법규)
         display: 결과 개수 (최대 100)
+
+    검색 결과의 "법령일련번호"(law) 또는 "행정규칙일련번호"(admrul) 값을
+    get_law_detail의 doc_id로 넘기면 조문/고시 원문 전체를 볼 수 있다.
     """
     if not LAW_OC:
         raise RuntimeError("LAW_OC가 설정되지 않았습니다 (.env 확인)")
 
     params = {
         "OC": LAW_OC,
-        "target": "law",
+        "target": target,
         "type": "JSON",
         "query": query,
         "display": display,
     }
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(LAW_SEARCH_URL, params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+
+@mcp.tool()
+async def get_law_detail(doc_id: str, target: str = "law") -> dict:
+    """법령 조문 또는 행정규칙(고시) 원문 전체를 조회한다.
+
+    Args:
+        doc_id: search_law 결과의 "법령일련번호"(target="law") 또는
+                "행정규칙일련번호"(target="admrul") 값
+        target: search_law에서 사용한 것과 동일하게 "law" 또는 "admrul" 지정
+    """
+    if not LAW_OC:
+        raise RuntimeError("LAW_OC가 설정되지 않았습니다 (.env 확인)")
+
+    params = {
+        "OC": LAW_OC,
+        "target": target,
+        "type": "JSON",
+        "ID": doc_id,
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(LAW_SERVICE_URL, params=params)
         resp.raise_for_status()
         return resp.json()
 
