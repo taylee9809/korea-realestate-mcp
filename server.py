@@ -29,6 +29,7 @@ LAW_OC = os.environ.get("LAW_OC", "")
 # 신청 후 Swagger UI/기술문서에서 정확한 엔드포인트를 반드시 재확인할 것.
 MOLIT_SH_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade"
 MOLIT_OFFI_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcOffiTrade/getRTMSDataSvcOffiTrade"
+MOLIT_APT_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade"
 
 LAW_SEARCH_URL = "http://www.law.go.kr/DRF/lawSearch.do"
 LAW_SERVICE_URL = "http://www.law.go.kr/DRF/lawService.do"
@@ -81,6 +82,30 @@ async def get_officetel_trade_price(lawd_cd: str, deal_ymd: str) -> dict:
     }
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(MOLIT_OFFI_TRADE_URL, params=params)
+        resp.raise_for_status()
+        return xmltodict.parse(resp.text)
+
+
+@mcp.tool()
+async def get_apt_trade_price(lawd_cd: str, deal_ymd: str) -> dict:
+    """국토교통부 아파트 매매 실거래가를 조회한다.
+
+    Args:
+        lawd_cd: 법정동코드 앞 5자리 (예: 서울 송파구 = "11710")
+        deal_ymd: 계약년월 6자리 (예: "202506")
+    """
+    if not MOLIT_SERVICE_KEY:
+        raise RuntimeError("MOLIT_SERVICE_KEY가 설정되지 않았습니다 (.env 확인)")
+
+    params = {
+        "serviceKey": MOLIT_SERVICE_KEY,
+        "LAWD_CD": lawd_cd,
+        "DEAL_YMD": deal_ymd,
+        "numOfRows": "1000",
+        "pageNo": "1",
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(MOLIT_APT_TRADE_URL, params=params)
         resp.raise_for_status()
         return xmltodict.parse(resp.text)
 
