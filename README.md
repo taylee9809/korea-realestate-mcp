@@ -17,6 +17,7 @@
 | 아파트 매매 | https://www.data.go.kr/data/15126469/openapi.do |
 | 상업업무용 부동산 매매 | https://www.data.go.kr/data/15126463/openapi.do |
 | 토지 매매 | data.go.kr에서 "국토교통부 토지 매매 신고 자료" 검색 |
+| 건축HUB 건축물대장정보 | https://www.data.go.kr/data/15134735/openapi.do |
 
 1. https://www.data.go.kr 가입
 2. 위 데이터셋 각각 활용신청 → 승인 대기
@@ -70,6 +71,9 @@ pip install -r requirements.txt
 - `get_commercial_trade_price(lawd_cd, deal_ymd)` — 상업업무용 부동산(근린생활시설·업무시설 등) 매매 실거래 조회
 - `get_land_trade_price(lawd_cd, deal_ymd)` — 토지 매매 실거래 조회
   (5개 전부 파라미터 동일: 법정동코드 5자리 + 계약년월 6자리)
+- `get_building_title_info(sigungu_cd, bjdong_cd, bun, ji)` — 건축물대장 표제부 조회
+  (대지면적·연면적·용도·사용승인일 등). 시군구코드 5자리 + 법정동코드 뒤5자리 + 지번(본번/부번,
+  4자리 0채움). 도로명주소 → 지번 변환은 별도(카카오맵 등) 필요, 이 도구는 지번 입력 후 상세정보만 조회.
 - `search_law(query, target, display)` — 법령/행정규칙 검색.
   `target="law"`(기본값)면 법률/시행령/시행규칙, `target="admrul"`이면 행정규칙(고시) —
   **투기과열지구 지정, 조정대상지역 지정** 같은 부처 고시가 여기 포함됨. `target="ordin"`은 자치법규.
@@ -88,6 +92,8 @@ pip install -r requirements.txt
   법제처 API 대상이 아예 아님 — 이건 여전히 웹서치나 "정비사업 정보몽땅" 직접 확인이 필요함.
 - 지정 고시가 "일부개정"이면 그 회차에 추가/제외된 지역만 나오고, 전체 누적 목록은 별도
   이력 조회가 필요할 수 있음.
+- 도로명주소 → 지번 변환 API는 별도 미구현(주소정보누리집 juso.go.kr 활용신청 필요) —
+  현재는 카카오맵 등으로 수동 변환 후 get_building_title_info에 지번 입력.
 
 ## 참고: 구분등기 다가구주택 관련
 

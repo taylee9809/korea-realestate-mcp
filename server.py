@@ -7,9 +7,10 @@
   3. get_apt_trade_price         : 국토부 아파트 매매 실거래가 조회
   4. get_commercial_trade_price  : 국토부 상업업무용 부동산 매매 실거래가 조회
   5. get_land_trade_price        : 국토부 토지 매매 실거래가 조회
-  6. search_law                  : 법제처 국가법령정보 법령/행정규칙(고시) 검색
-  7. get_law_detail              : 법령 조문/고시 원문 전체 조회
-  8. calc_transfer_tax           : 양도소득세 계산 (세율표는 절대 하드코딩하지 않음 — 아래 설명 참고)
+  6. get_building_title_info     : 건축HUB 건축물대장(표제부) - 대지면적/연면적/용도 조회
+  7. search_law                  : 법제처 국가법령정보 법령/행정규칙(고시) 검색
+  8. get_law_detail              : 법령 조문/고시 원문 전체 조회
+  9. calc_transfer_tax           : 양도소득세 계산 (세율표는 절대 하드코딩하지 않음 — 아래 설명 참고)
 
 세율표를 하드코딩하지 않는 이유:
   다주택 중과세율, 장기보유특별공제율, 1세대1주택 비과세 기준(현재 12억)은
@@ -37,6 +38,9 @@ MOLIT_OFFI_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcOffiTrade/getR
 MOLIT_APT_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade"
 MOLIT_NRG_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcNrgTrade/getRTMSDataSvcNrgTrade"
 MOLIT_LAND_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade"
+
+# 건축HUB 건축물대장정보 서비스 (별도 활용신청 필요, data.go.kr id 15134735)
+BLD_TITLE_INFO_URL = "http://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo"
 
 LAW_SEARCH_URL = "http://www.law.go.kr/DRF/lawSearch.do"
 LAW_SERVICE_URL = "http://www.law.go.kr/DRF/lawService.do"
@@ -161,6 +165,36 @@ async def get_land_trade_price(lawd_cd: str, deal_ymd: str) -> dict:
     }
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(MOLIT_LAND_TRADE_URL, params=params)
+        resp.raise_for_status()
+        return xmltodict.parse(resp.text)
+
+
+@mcp.tool()
+async def get_building_title_info(
+    sigungu_cd: str, bjdong_cd: str, bun: str = "0000", ji: str = "0000"
+) -> dict:
+    """건축HUB 건축물대장(표제부)에서 대지면적·연면적·용도·사용승인일 등을 조회한다.
+
+    Args:
+        sigungu_cd: 시군구코드 5자리 (예: 서울 강동구 = "11740")
+        bjdong_cd: 법정동코드 뒤 5자리 (예: 천호동 = "10900")
+        bun: 지번 본번 4자리, 0 채움 (예: 145번지 = "0145")
+        ji: 지번 부번 4자리, 0 채움 (예: 12 = "0012", 본번만 있으면 "0000")
+    """
+    if not MOLIT_SERVICE_KEY:
+        raise RuntimeError("MOLIT_SERVICE_KEY가 설정되지 않았습니다 (.env 확인)")
+
+    params = {
+        "serviceKey": MOLIT_SERVICE_KEY,
+        "sigunguCd": sigungu_cd,
+        "bjdongCd": bjdong_cd,
+        "bun": bun,
+        "ji": ji,
+        "numOfRows": "100",
+        "pageNo": "1",
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(BLD_TITLE_INFO_URL, params=params)
         resp.raise_for_status()
         return xmltodict.parse(resp.text)
 
