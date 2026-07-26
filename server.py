@@ -1,10 +1,15 @@
 """
 개인용 부동산 MCP 서버.
 
-목적: 구분등기된 다가구주택 1개를 추적하기 위한 3가지 도구만 제공한다.
-  1. get_house_trade_price : 국토부 단독/다가구 매매 실거래가 조회
-  2. search_law             : 법제처 국가법령정보 법령 조회 (시행일 기준 최신 조문 확인용)
-  3. calc_transfer_tax      : 양도소득세 계산 (세율표는 절대 하드코딩하지 않음 — 아래 설명 참고)
+목적: 실거래가/법령/양도세 계산을 API로 직접 확인해서 할루시네이션 없이 답하기 위한 도구 모음.
+  1. get_house_trade_price       : 국토부 단독/다가구 매매 실거래가 조회
+  2. get_officetel_trade_price   : 국토부 오피스텔 매매 실거래가 조회
+  3. get_apt_trade_price         : 국토부 아파트 매매 실거래가 조회
+  4. get_commercial_trade_price  : 국토부 상업업무용 부동산 매매 실거래가 조회
+  5. get_land_trade_price        : 국토부 토지 매매 실거래가 조회
+  6. search_law                  : 법제처 국가법령정보 법령/행정규칙(고시) 검색
+  7. get_law_detail              : 법령 조문/고시 원문 전체 조회
+  8. calc_transfer_tax           : 양도소득세 계산 (세율표는 절대 하드코딩하지 않음 — 아래 설명 참고)
 
 세율표를 하드코딩하지 않는 이유:
   다주택 중과세율, 장기보유특별공제율, 1세대1주택 비과세 기준(현재 12억)은
@@ -30,6 +35,8 @@ LAW_OC = os.environ.get("LAW_OC", "")
 MOLIT_SH_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade"
 MOLIT_OFFI_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcOffiTrade/getRTMSDataSvcOffiTrade"
 MOLIT_APT_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade"
+MOLIT_NRG_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcNrgTrade/getRTMSDataSvcNrgTrade"
+MOLIT_LAND_TRADE_URL = "http://apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade"
 
 LAW_SEARCH_URL = "http://www.law.go.kr/DRF/lawSearch.do"
 LAW_SERVICE_URL = "http://www.law.go.kr/DRF/lawService.do"
@@ -106,6 +113,54 @@ async def get_apt_trade_price(lawd_cd: str, deal_ymd: str) -> dict:
     }
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(MOLIT_APT_TRADE_URL, params=params)
+        resp.raise_for_status()
+        return xmltodict.parse(resp.text)
+
+
+@mcp.tool()
+async def get_commercial_trade_price(lawd_cd: str, deal_ymd: str) -> dict:
+    """국토교통부 상업업무용 부동산(근린생활시설, 업무시설 등) 매매 실거래가를 조회한다.
+
+    Args:
+        lawd_cd: 법정동코드 앞 5자리 (예: 서울 마포구 = "11440")
+        deal_ymd: 계약년월 6자리 (예: "202506")
+    """
+    if not MOLIT_SERVICE_KEY:
+        raise RuntimeError("MOLIT_SERVICE_KEY가 설정되지 않았습니다 (.env 확인)")
+
+    params = {
+        "serviceKey": MOLIT_SERVICE_KEY,
+        "LAWD_CD": lawd_cd,
+        "DEAL_YMD": deal_ymd,
+        "numOfRows": "1000",
+        "pageNo": "1",
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(MOLIT_NRG_TRADE_URL, params=params)
+        resp.raise_for_status()
+        return xmltodict.parse(resp.text)
+
+
+@mcp.tool()
+async def get_land_trade_price(lawd_cd: str, deal_ymd: str) -> dict:
+    """국토교통부 토지 매매 실거래가를 조회한다.
+
+    Args:
+        lawd_cd: 법정동코드 앞 5자리 (예: 서울 마포구 = "11440")
+        deal_ymd: 계약년월 6자리 (예: "202506")
+    """
+    if not MOLIT_SERVICE_KEY:
+        raise RuntimeError("MOLIT_SERVICE_KEY가 설정되지 않았습니다 (.env 확인)")
+
+    params = {
+        "serviceKey": MOLIT_SERVICE_KEY,
+        "LAWD_CD": lawd_cd,
+        "DEAL_YMD": deal_ymd,
+        "numOfRows": "1000",
+        "pageNo": "1",
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(MOLIT_LAND_TRADE_URL, params=params)
         resp.raise_for_status()
         return xmltodict.parse(resp.text)
 

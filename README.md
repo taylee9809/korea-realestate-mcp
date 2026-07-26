@@ -1,19 +1,30 @@
 # korea-realestate-mcp
 
-구분등기된 다가구주택 1채를 추적하기 위한 개인용 MCP 서버.
-실거래가 조회, 법령 조회, 양도소득세 계산 3가지만 한다. 재건축 단계 추적은 포함하지 않음(지자체별 공공사이트에서 수동 확인 또는 웹서치 사용).
+부동산 실거래가/법령/양도세 계산을 API로 직접 확인하는 개인용 MCP 서버.
+재건축 단계 추적은 포함하지 않음(지자체별 공공사이트에서 수동 확인 또는 웹서치 사용).
 
 ## 1. API 키 발급 (직접 해야 함)
 
 ### (1) 국토교통부 실거래가 - 공공데이터포털
+아래 5개 데이터셋을 **각각 개별로** 활용신청해야 함 (같은 계정/서비스키를 공유하지만,
+승인은 데이터셋별로 따로 남). 승인 후에도 실제 반영까지 2~3일 걸릴 수 있음(포털엔 바로
+"승인"으로 표시돼도 게이트웨이 반영은 별도).
+
+| 데이터셋 | 링크 |
+|---|---|
+| 단독/다가구 매매 | https://www.data.go.kr/data/15126465/openapi.do |
+| 오피스텔 매매 | https://www.data.go.kr/data/15126464/openapi.do |
+| 아파트 매매 | https://www.data.go.kr/data/15126469/openapi.do |
+| 상업업무용 부동산 매매 | https://www.data.go.kr/data/15126463/openapi.do |
+| 토지 매매 | data.go.kr에서 "국토교통부 토지 매매 신고 자료" 검색 |
+
 1. https://www.data.go.kr 가입
-2. "국토교통부_단독/다가구 매매 실거래가 자료" 검색 (https://www.data.go.kr/data/15126465/openapi.do)
-3. 활용신청 → 승인 대기 (보통 자동승인, 최대 1일)
-4. 마이페이지에서 서비스키(일반 인증키) 복사
-5. **중요**: 승인 후 상세페이지의 Swagger UI 또는 "기술문서.hwp"를 열어서 `server.py`의
-   `MOLIT_SH_TRADE_URL`이 실제 엔드포인트와 일치하는지 반드시 확인할 것.
-   (RTMSDataSvc 계열 명명 규칙을 따라 작성했지만, data.go.kr이 공식 문서를 다운로드 없이
-   공개하지 않아 이번 조사로는 100% 확정하지 못했음)
+2. 위 데이터셋 각각 활용신청 → 승인 대기
+3. 마이페이지에서 서비스키(일반 인증키) 복사 (전부 동일한 키 사용)
+4. **중요**: 엔드포인트 URL은 RTMSDataSvc 계열 명명 규칙(예: `RTMSDataSvcSHTrade`,
+   `RTMSDataSvcNrgTrade`, `RTMSDataSvcLandTrade`)을 따라 작성했고 단독/다가구·아파트·오피스텔은
+   실제 호출로 검증 완료. 상업업무용·토지는 아직 실제 호출 검증 전이므로, 승인 후 Swagger UI로
+   재확인할 것.
 
 ### (2) 법제처 국가법령정보 Open API
 1. https://open.law.go.kr 가입
@@ -53,7 +64,12 @@ pip install -r requirements.txt
 
 ## 4. 도구
 
-- `get_house_trade_price(lawd_cd, deal_ymd)` — 법정동코드(5자리) + 계약년월(6자리)로 단독/다가구 실거래 조회
+- `get_house_trade_price(lawd_cd, deal_ymd)` — 단독/다가구 매매 실거래 조회
+- `get_officetel_trade_price(lawd_cd, deal_ymd)` — 오피스텔 매매 실거래 조회
+- `get_apt_trade_price(lawd_cd, deal_ymd)` — 아파트 매매 실거래 조회
+- `get_commercial_trade_price(lawd_cd, deal_ymd)` — 상업업무용 부동산(근린생활시설·업무시설 등) 매매 실거래 조회
+- `get_land_trade_price(lawd_cd, deal_ymd)` — 토지 매매 실거래 조회
+  (5개 전부 파라미터 동일: 법정동코드 5자리 + 계약년월 6자리)
 - `search_law(query, target, display)` — 법령/행정규칙 검색.
   `target="law"`(기본값)면 법률/시행령/시행규칙, `target="admrul"`이면 행정규칙(고시) —
   **투기과열지구 지정, 조정대상지역 지정** 같은 부처 고시가 여기 포함됨. `target="ordin"`은 자치법규.
