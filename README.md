@@ -13,28 +13,38 @@
 | 데이터셋 | 링크 |
 |---|---|
 | 단독/다가구 매매 | https://www.data.go.kr/data/15126465/openapi.do |
+| 단독/다가구 전월세 | data.go.kr에서 "국토교통부 단독/다가구 전월세 자료" 검색 |
 | 오피스텔 매매 | https://www.data.go.kr/data/15126464/openapi.do |
+| 오피스텔 전월세 | data.go.kr에서 "국토교통부 오피스텔 전월세 자료" 검색 |
 | 아파트 매매 | https://www.data.go.kr/data/15126469/openapi.do |
+| 아파트 전월세 | data.go.kr에서 "국토교통부 아파트 전월세 자료" 검색 |
 | 상업업무용 부동산 매매 | https://www.data.go.kr/data/15126463/openapi.do |
 | 토지 매매 | data.go.kr에서 "국토교통부 토지 매매 신고 자료" 검색 |
+| 연립다세대(빌라) 매매 | data.go.kr에서 "국토교통부 연립다세대 매매 실거래가 자료" 검색 |
+| 연립다세대(빌라) 전월세 | data.go.kr에서 "국토교통부 연립다세대 전월세 자료" 검색 |
 | 건축HUB 건축물대장정보 | https://www.data.go.kr/data/15134735/openapi.do |
 
 1. https://www.data.go.kr 가입
 2. 위 데이터셋 각각 활용신청 → 승인 대기
 3. 마이페이지에서 서비스키(일반 인증키) 복사 (전부 동일한 키 사용)
 4. **중요**: 엔드포인트 URL은 RTMSDataSvc 계열 명명 규칙(예: `RTMSDataSvcSHTrade`,
-   `RTMSDataSvcNrgTrade`, `RTMSDataSvcLandTrade`)을 따라 작성했고 단독/다가구·아파트·오피스텔은
-   실제 호출로 검증 완료. 상업업무용·토지는 아직 실제 호출 검증 전이므로, 승인 후 Swagger UI로
-   재확인할 것.
+   `RTMSDataSvcNrgTrade`, `RTMSDataSvcLandTrade`)을 따라 작성했고 단독/다가구·아파트·오피스텔
+   **매매**는 실제 호출로 검증 완료. 상업업무용·토지·전월세 4종·연립다세대 매매/전월세는
+   아직 실제 호출 검증 전이므로, 승인 후 Swagger UI로 엔드포인트/파라미터를 반드시 재확인할 것.
 
 ### (2) 법제처 국가법령정보 Open API
 1. https://open.law.go.kr 가입
 2. OC(활용신청 시 사용한 이메일 아이디, @ 앞부분) 확인 — 별도 승인 절차 없이 바로 사용 가능
 
-두 값을 `.env` 파일에 넣기 (`.env.example` 복사해서 사용):
+### (3) 도로명주소 API (주소 → 법정동코드/지번 변환)
+1. https://business.juso.go.kr 가입 → Open API 신청
+2. 별도 심사 없이 바로 승인키(confmKey) 발급됨 (무료)
+
+세 값을 `.env` 파일에 넣기 (`.env.example` 복사해서 사용):
 ```
 MOLIT_SERVICE_KEY=발급받은키
 LAW_OC=이메일아이디
+JUSO_API_KEY=발급받은승인키
 ```
 
 ## 2. 설치
@@ -56,7 +66,8 @@ pip install -r requirements.txt
       "args": ["C:/Users/User/Documents/korea-realestate-mcp/server.py"],
       "env": {
         "MOLIT_SERVICE_KEY": "발급받은키",
-        "LAW_OC": "이메일아이디"
+        "LAW_OC": "이메일아이디",
+        "JUSO_API_KEY": "발급받은승인키"
       }
     }
   }
@@ -65,15 +76,21 @@ pip install -r requirements.txt
 
 ## 4. 도구
 
-- `get_house_trade_price(lawd_cd, deal_ymd)` — 단독/다가구 매매 실거래 조회
-- `get_officetel_trade_price(lawd_cd, deal_ymd)` — 오피스텔 매매 실거래 조회
-- `get_apt_trade_price(lawd_cd, deal_ymd)` — 아파트 매매 실거래 조회
-- `get_commercial_trade_price(lawd_cd, deal_ymd)` — 상업업무용 부동산(근린생활시설·업무시설 등) 매매 실거래 조회
-- `get_land_trade_price(lawd_cd, deal_ymd)` — 토지 매매 실거래 조회
-  (5개 전부 파라미터 동일: 법정동코드 5자리 + 계약년월 6자리)
+- `search_address(keyword, page, count_per_page)` — 도로명주소 API로 주소 검색 → 다른 도구가
+  요구하는 lawd_cd/sigungu_cd/bjdong_cd/bun/ji를 건물관리번호(bdMgtSn)에서 파싱해 함께 반환.
+  **파싱 규칙은 아직 실제 응답으로 검증 전** — 처음 쓸 때 bdMgtSn 원본과 대조해서 확인할 것.
+- `get_house_trade_price(lawd_cd, deal_ymd)` / `get_house_rent_price(...)` — 단독/다가구 매매·전월세
+- `get_officetel_trade_price(lawd_cd, deal_ymd)` / `get_officetel_rent_price(...)` — 오피스텔 매매·전월세
+- `get_apt_trade_price(lawd_cd, deal_ymd)` / `get_apt_rent_price(...)` — 아파트 매매·전월세
+- `get_commercial_trade_price(lawd_cd, deal_ymd)` — 상업업무용 부동산(근린생활시설·업무시설 등) 매매
+- `get_land_trade_price(lawd_cd, deal_ymd)` — 토지 매매
+- `get_villa_trade_price(lawd_cd, deal_ymd)` / `get_villa_rent_price(...)` — 연립다세대(빌라) 매매·전월세.
+  전세사기 위험이 실제로 집중되는 주택 유형이라 별도 추가함.
+  (매매·전월세 도구 전부 파라미터 동일: 법정동코드 5자리 + 계약년월 6자리. 전월세 4종·연립다세대
+  매매/전월세는 아직 실제 호출 검증 전 — 위 API 키 발급 섹션 참고)
 - `get_building_title_info(sigungu_cd, bjdong_cd, bun, ji)` — 건축물대장 표제부 조회
-  (대지면적·연면적·용도·사용승인일 등). 시군구코드 5자리 + 법정동코드 뒤5자리 + 지번(본번/부번,
-  4자리 0채움). 도로명주소 → 지번 변환은 별도(카카오맵 등) 필요, 이 도구는 지번 입력 후 상세정보만 조회.
+  (대지면적·연면적·용도·사용승인일 등). **위반건축물여부 필드는 없음** (2026-08-01 실제 호출로 확인) —
+  필요하면 건축HUB의 다른 하위서비스를 별도 활용신청해야 함, 아직 미구현.
 - `search_law(query, target, display)` — 법령/행정규칙 검색.
   `target="law"`(기본값)면 법률/시행령/시행규칙, `target="admrul"`이면 행정규칙(고시) —
   **투기과열지구 지정, 조정대상지역 지정** 같은 부처 고시가 여기 포함됨. `target="ordin"`은 자치법규.
@@ -83,6 +100,11 @@ pip install -r requirements.txt
   절대 기본값이 없음** — 호출 시 search_law로 확인한 최신 소득세법 시행령 별표 값을 직접 넘겨야 함.
   이유: 다주택 중과세율/공제율은 정책에 따라 자주 바뀌어서, 하드코딩하면 시점이 안 맞는 틀린
   계산이 나올 수 있기 때문.
+- `calc_jeonse_ratio(sale_price, jeonse_deposit)` — 전세가율 계산과 깡통전세 위험 구간 코멘트.
+  구간 기준은 참고용이며 법적 안전선이 아님.
+- `generate_landlord_disclosure_request(tenant_name, property_address)` — 주택임대차보호법
+  제3조의7(임대인 정보제시의무)에 근거한 요청서 문안 생성. 법률 자문이 아니라 초안 생성기 —
+  실사용 전 search_law로 현재 조문 재확인 필요.
 
 ### 커버리지 한계 (중요)
 - `admrul` 검색은 부처가 "행정규칙"으로 등록한 고시만 잡힘 — 투기과열지구/조정대상지역처럼
@@ -92,8 +114,12 @@ pip install -r requirements.txt
   법제처 API 대상이 아예 아님 — 이건 여전히 웹서치나 "정비사업 정보몽땅" 직접 확인이 필요함.
 - 지정 고시가 "일부개정"이면 그 회차에 추가/제외된 지역만 나오고, 전체 누적 목록은 별도
   이력 조회가 필요할 수 있음.
-- 도로명주소 → 지번 변환 API는 별도 미구현(주소정보누리집 juso.go.kr 활용신청 필요) —
-  현재는 카카오맵 등으로 수동 변환 후 get_building_title_info에 지번 입력.
+- **등기부등본은 의도적으로 미구현.** 근저당권·소유자 일치 확인이 위험진단에서 제일 중요하지만,
+  인터넷등기소는 개별 문서 열람 오픈API가 없고 CODEF 등 3자 API는 건당 비용이 발생함. 이 서버는
+  "비용 없는 공공데이터"만 다룬다는 원칙을 지키려고 자동화하지 않음 — 사용자가 직접 열람한 내용을
+  붙여넣어 해석을 요청하는 방식으로 우회할 것.
+- `search_address`의 bdMgtSn 파싱 규칙과 전월세 4종·연립다세대 매매/전월세 엔드포인트는 아직
+  실제 호출로 검증 전임 (위 각 섹션 참고).
 
 ## 참고: 구분등기 다가구주택 관련
 
