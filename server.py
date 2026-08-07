@@ -38,6 +38,10 @@
                                       (체크리스트 "③ 토지이용계획" 자동화)
   34. get_broker_offices            : 전국 공인중개사사무소 조회 (지역/상호명 키워드)
                                       — 로컬 캐시 기반, 아래 설명 참고
+  35. calc_acquisition_tax          : 취득세(+지방교육세+농어촌특별세) 계산
+                                      (세율표는 calc_transfer_tax와 동일하게 하드코딩 안 함)
+  36. generate_resident_registration_request : 전입세대확인서 열람/교부 신청 안내문 생성
+                                      (본인만 신청 가능 — API 대리조회 자체가 법적으로 불가)
 
 세율표를 하드코딩하지 않는 이유:
   다주택 중과세율, 장기보유특별공제율, 1세대1주택 비과세 기준(현재 12억)은
@@ -712,6 +716,109 @@ def generate_landlord_disclosure_request(
         "요청인": signer,
         "본문": body,
         "주의": "요청 거부 시 효과·예외 등 세부내용은 search_law로 최신 조문을 반드시 재확인할 것",
+    }
+
+
+@mcp.tool()
+def calc_acquisition_tax(
+    acquisition_price: int,
+    standard_rate: float,
+    heavy_surcharge_rate: float = 0.0,
+    ordinance_adjustment_rate: float = 0.0,
+    local_education_tax_rate: float = 0.0,
+    rural_special_tax_rate: float = 0.0,
+) -> dict:
+    """취득세(+지방교육세+농어촌특별세)를 계산한다. 세율은 반드시 search_law로 확인한 값을 넘길 것.
+
+    지방세법 제11조(부동산 취득의 세율)의 표준세율에, 해당하면 제13조의2(법인/다주택
+    중과)의 가산세율과 제14조(조례에 따른 세율 조정, 100분의 50 범위)를 더해 실효세율을
+    구성한다. calc_transfer_tax와 같은 이유로 이 함수는 세율표를 하드코딩하지 않는다 —
+    조정대상지역 지정 현황, 다주택 판정 기준(일시적 2주택 등 중과 배제 사유 포함)이
+    수시로 바뀌므로, 매번 search_law("지방세법")로 시행 중인 조문을 확인해서 세율을
+    직접 계산한 뒤 넘길 것. 이 함수는 세율을 판단하지 않고 산식만 적용한다.
+
+    지방교육세·농어촌특별세도 취득세 부가세목이라 함께 계산할 수 있게 인자를 뒀지만,
+    두 세율도 정책적으로 바뀔 수 있어 하드코딩하지 않는다 — 생략하면 0으로 간주해
+    취득세 본세만 계산한다.
+
+    Args:
+        acquisition_price: 취득가액/과세표준 (원)
+        standard_rate: 지방세법 제11조 표준세율 (0~1)
+        heavy_surcharge_rate: 다주택·법인 등 중과기준세율 가산분 (0~1), 해당 없으면 0
+        ordinance_adjustment_rate: 지방세법 제14조 조례 가감율 (-0.5~0.5), 해당 없으면 0
+        local_education_tax_rate: 지방교육세율 (0~1), 미확인 시 0으로 두고 별도 계산
+        rural_special_tax_rate: 농어촌특별세율 (0~1) — 전용면적 85㎡ 이하는 통상 비과세이므로
+            과세대상 여부부터 확인 후 넘길 것, 미확인 시 0
+
+    Returns:
+        계산 과정이 담긴 dict (적용세율, 취득세 본세, 지방교육세, 농어촌특별세, 총납부세액)
+    """
+    if acquisition_price <= 0:
+        raise ValueError("acquisition_price는 0보다 커야 합니다")
+
+    applied_rate = standard_rate + heavy_surcharge_rate + ordinance_adjustment_rate
+    acquisition_tax = int(acquisition_price * applied_rate)
+    local_education_tax = int(acquisition_price * local_education_tax_rate)
+    rural_special_tax = int(acquisition_price * rural_special_tax_rate)
+
+    return {
+        "취득가액": acquisition_price,
+        "적용세율(표준+중과+조례)": applied_rate,
+        "취득세": acquisition_tax,
+        "지방교육세": local_education_tax,
+        "농어촌특별세": rural_special_tax,
+        "총납부세액": acquisition_tax + local_education_tax + rural_special_tax,
+        "주의": "세율은 전부 호출자가 search_law로 확인해서 넘긴 값 — 이 함수는 세율을 판단하지 않고 산식만 적용함",
+    }
+
+
+@mcp.tool()
+def generate_resident_registration_request(
+    applicant_name: str = "", property_address: str = "", applicant_role: str = ""
+) -> dict:
+    """전입세대확인서 열람/교부 신청 안내문과 준비서류를 만든다.
+
+    주민등록법 제29조의2에 따라 전입세대확인서는 해당 건물의 소유자·임차인·매매계약자
+    본인(또는 그 위임을 받은 자)만 신청할 수 있다(같은 조 제2항) — 제3자가 API로
+    대리 조회하는 것은 법적으로 불가능하므로, 이 도구는 조회를 대행하지 않고 사용자가
+    직접 신청할 때 필요한 절차·서류만 안내한다.
+
+    Args:
+        applicant_name: 신청인 이름 (생략 가능)
+        property_address: 확인 대상 건물 주소 (생략 가능)
+        applicant_role: 신청인 자격 — "소유자"/"임차인"/"매매계약자"/"임대차계약자" 중 하나,
+            생략 시 일반 안내만 제공
+    """
+    header = (
+        f"{property_address} 전입세대확인서 열람/교부 신청 안내"
+        if property_address
+        else "전입세대확인서 열람/교부 신청 안내"
+    )
+
+    role_note = (
+        f"신청인 자격: {applicant_role} 본인"
+        if applicant_role
+        else "신청인은 해당 건물의 소유자·임차인·매매계약자·임대차계약자 본인이거나 "
+        "그 위임을 받은 자여야 함(주민등록법 제29조의2②)"
+    )
+
+    body = (
+        "1. 신청 근거: 주민등록법 제29조의2(전입세대확인서의 열람 또는 교부)\n"
+        "2. 신청 방법: 주민등록정보시스템을 통해 열람 또는 등·초본교부기관"
+        "(읍·면·동 주민센터 등)에 신청\n"
+        "3. 확인 내용: 해당 건물에 주민등록된 세대주·동거인의 성명과 전입일자\n"
+        "4. 준비서류: 신분증, (본인이 아닌 경우) 위임장 및 위임인 신분증 사본, "
+        "매매/임대차계약서 등 신청 자격 증빙\n"
+        "5. 수수료: 행정안전부령으로 정하는 소정 수수료 발생"
+    )
+
+    return {
+        "제목": header,
+        "신청인": applicant_name or "신청인 본인",
+        "자격안내": role_note,
+        "본문": body,
+        "주의": "제3자(중개업체 등)가 대리로 자동 조회할 수 없는 항목 — 반드시 본인이 신청해야 함. "
+        "매매/임대차계약자는 계약서를 지참하면 계약 체결 후 잔금일 전까지도 신청 가능(실무상 통상 허용)",
     }
 
 
